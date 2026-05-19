@@ -1,5 +1,6 @@
 # Local config — never commit
 .env
+.sops.yaml
 
 # Decrypted secrets — never commit plaintext
 secrets/*.env
@@ -14,3 +15,4 @@ secrets/*.yml
 .DS_Store
 *.swp
 *~
+

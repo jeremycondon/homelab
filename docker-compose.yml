@@ -6,6 +6,8 @@ volumes:
   portainer_data:
   prometheus_data:
   traefik_certs:
+  photoprism_db:
+  uptime_kuma_data:
 
 services:
 
@@ -137,6 +139,74 @@ services:
       # TODO: uncomment when Let's Encrypt is configured
       # - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
       - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+
+  # ── Uptime monitoring ──────────────────────────────────────────────────────
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: unless-stopped
+    volumes:
+      - uptime_kuma_data:/app/data
+    networks:
+      - homelab
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.uptime-kuma.rule=Host(`uptime.${DOMAIN}`)"
+      - "traefik.http.routers.uptime-kuma.entrypoints=websecure"
+      - "traefik.http.routers.uptime-kuma.tls=true"
+      # TODO: uncomment when Let's Encrypt is configured
+      # - "traefik.http.routers.uptime-kuma.tls.certresolver=letsencrypt"
+      - "traefik.http.services.uptime-kuma.loadbalancer.server.port=3001"
+
+  # ── Photos ─────────────────────────────────────────────────────────────────
+  photoprism:
+    image: photoprism/photoprism:latest
+    container_name: photoprism
+    restart: unless-stopped
+    env_file:
+      - secrets/photoprism.env
+    environment:
+      - TZ=America/Detroit
+      - PHOTOPRISM_ORIGINALS_PATH=/photoprism/originals
+      - PHOTOPRISM_STORAGE_PATH=/photoprism/storage
+      - PHOTOPRISM_DATABASE_DRIVER=mysql
+      - PHOTOPRISM_DATABASE_SERVER=photoprism_db:3306
+      - PHOTOPRISM_DATABASE_NAME=photoprism
+      - PHOTOPRISM_DATABASE_USER=photoprism
+      # PHOTOPRISM_DATABASE_PASSWORD comes from env_file
+      - PHOTOPRISM_SITE_URL=https://photos.${DOMAIN}/
+      - PHOTOPRISM_DISABLE_TLS=true
+    volumes:
+      - /tank/photos:/photoprism/originals
+      - /data/photoprism/storage:/photoprism/storage
+    networks:
+      - homelab
+    depends_on:
+      - photoprism_db
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.photoprism.rule=Host(`photos.${DOMAIN}`)"
+      - "traefik.http.routers.photoprism.entrypoints=websecure"
+      - "traefik.http.routers.photoprism.tls=true"
+      # TODO: uncomment when Let's Encrypt is configured
+      # - "traefik.http.routers.photoprism.tls.certresolver=letsencrypt"
+      - "traefik.http.services.photoprism.loadbalancer.server.port=2342"
+
+  photoprism_db:
+    image: mariadb:11
+    container_name: photoprism_db
+    restart: unless-stopped
+    env_file:
+      - secrets/photoprism.env
+    volumes:
+      - photoprism_db:/var/lib/mysql
+    networks:
+      - homelab
+    command:
+      - --innodb-buffer-pool-size=256M
+      - --transaction-isolation=READ-COMMITTED
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
 
   # ── File sharing ───────────────────────────────────────────────────────────
   samba:
