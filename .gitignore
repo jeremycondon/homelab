@@ -1,0 +1,16 @@
+# Local config — never commit
+.env
+
+# Decrypted secrets — never commit plaintext
+secrets/*.env
+secrets/*.yml
+!secrets/*.example
+!secrets/*.enc
+
+# Data volumes
+/data/
+
+# OS
+.DS_Store
+*.swp
+*~

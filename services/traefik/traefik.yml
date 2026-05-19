@@ -1,0 +1,79 @@
+api:
+  dashboard: true
+  insecure: false  # dashboard served via labeled router, not open port
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    exposedByDefault: false  # services must opt-in with traefik.enable=true
+    network: homelab
+
+# ── TODO: Let's Encrypt via Route53 DNS challenge ─────────────────────────
+#
+# Certs will be globally trusted — no browser exception needed.
+# Domain: yourdomain.com (Route53). See secrets/traefik.env.example for creds.
+#
+# Steps:
+#   1. AWS console — create an IAM user with this inline policy
+#      (replace YOUR_HOSTED_ZONE_ID with the Zone ID from Route53 > Hosted Zones):
+#
+#      {
+#        "Version": "2012-10-17",
+#        "Statement": [
+#          { "Effect": "Allow", "Action": "route53:GetChange",
+#            "Resource": "arn:aws:route53:::change/*" },
+#          { "Effect": "Allow",
+#            "Action": ["route53:ChangeResourceRecordSets", "route53:ListResourceRecordSets"],
+#            "Resource": "arn:aws:route53:::hostedzone/YOUR_HOSTED_ZONE_ID" },
+#          { "Effect": "Allow", "Action": "route53:ListHostedZonesByName",
+#            "Resource": "*" }
+#        ]
+#      }
+#
+#   2. Generate an access key for that user, paste into secrets/traefik.env:
+#        cp secrets/traefik.env.example secrets/traefik.env
+#        nano secrets/traefik.env
+#        make encrypt-secrets
+#
+#   3. Route53 console — add A records pointing each subdomain to the server's
+#      internal IP (they don't need to be publicly reachable):
+#        traefik.yourdomain.com     → 192.168.x.x
+#        portainer.yourdomain.com   → 192.168.x.x
+#        grafana.yourdomain.com     → 192.168.x.x
+#        prometheus.yourdomain.com  → 192.168.x.x
+#
+#   4. Uncomment the certificatesResolvers block below.
+#
+#   5. In docker-compose.yml:
+#        a. Add to the traefik service:
+#             env_file:
+#               - secrets/traefik.env
+#        b. Add to every router's labels:
+#             - "traefik.http.routers.<name>.tls.certresolver=letsencrypt"
+#
+#   6. make down && make up — Traefik will create TXT records in Route53,
+#      Let's Encrypt will validate, and certs will be issued within ~60 seconds.
+#
+# certificatesResolvers:
+#   letsencrypt:
+#     acme:
+#       email: YOUREMAIL@domain.com
+#       storage: /certs/acme.json
+#       dnsChallenge:
+#         provider: route53
+#         resolvers:
+#           - "8.8.8.8:53"
+#           - "1.1.1.1:53"
+
+log:
+  level: INFO

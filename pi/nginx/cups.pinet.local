@@ -1,0 +1,10 @@
+server {
+    listen 80;
+    server_name cups.pinet.local;
+
+    location / {
+        proxy_pass http://localhost:631;
+        proxy_set_header Host localhost;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}

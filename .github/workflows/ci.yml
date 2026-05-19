@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@2.0.0
+        with:
+          scandir: '.'
+          severity: warning
+
+  validate-compose:
+    name: Validate docker-compose.yml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate compose syntax
+        run: docker compose config --quiet
+
+  secrets-guard:
+    name: No plaintext secrets committed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for unencrypted secret files
+        run: |
+          # Catch any *.env or *.yml in secrets/ that isn't an .example or .enc file.
+          # gitignore normally blocks these, but this acts as a CI safety net.
+          leaked=$(git ls-files secrets/ | grep -E '\.(env|yml)$' | grep -vE '\.(example|enc)$' || true)
+          if [ -n "$leaked" ]; then
+            echo "ERROR: Plaintext secret files must not be committed:"
+            echo "$leaked"
+            echo "Run 'make encrypt-secrets' and commit the .enc files instead."
+            exit 1
+          fi
+          echo "No plaintext secrets found."
+
+      - name: Scan git history for secrets (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}  # Required for private repos

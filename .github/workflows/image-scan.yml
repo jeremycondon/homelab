@@ -1,0 +1,61 @@
+name: Image Security Scan
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docker-compose.yml
+  schedule:
+    - cron: '0 6 * * 1'  # Every Monday at 6 AM UTC
+  workflow_dispatch:
+
+jobs:
+  extract-images:
+    name: Extract images from compose file
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse image list
+        id: set-matrix
+        run: |
+          images=$(grep -E '^\s+image:' docker-compose.yml \
+            | awk '{print $2}' \
+            | sort -u \
+            | jq -R . \
+            | jq -sc .)
+          echo "Discovered images: $images"
+          echo "matrix={\"image\":$images}" >> "$GITHUB_OUTPUT"
+
+  scan:
+    name: Trivy — ${{ matrix.image }}
+    needs: extract-images
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.extract-images.outputs.matrix) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan ${{ matrix.image }}
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          image-ref: ${{ matrix.image }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '0'
+
+      - name: Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+          # Unique category so each image gets its own panel
+          category: trivy-${{ matrix.image }}

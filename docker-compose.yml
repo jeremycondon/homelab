@@ -1,0 +1,154 @@
+networks:
+  homelab:
+    name: homelab
+
+volumes:
+  portainer_data:
+  prometheus_data:
+  traefik_certs:
+
+services:
+
+  # ── Reverse proxy ──────────────────────────────────────────────────────────
+  traefik:
+    image: traefik:v3.6.7
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./services/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - traefik_certs:/certs
+    # TODO: add env_file when enabling Let's Encrypt (see services/traefik/traefik.yml)
+    # env_file:
+    #   - secrets/traefik.env
+    extra_hosts:
+      - "host-gateway:host-gateway"
+    networks:
+      - homelab
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=homelab"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN}`)"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls=true"
+      # TODO: uncomment when Let's Encrypt is configured
+      # - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard.service=api@internal"
+
+  # ── UI ─────────────────────────────────────────────────────────────────────
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - homelab
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.portainer.rule=Host(`portainer.${DOMAIN}`)"
+      - "traefik.http.routers.portainer.entrypoints=websecure"
+      - "traefik.http.routers.portainer.tls=true"
+      # TODO: uncomment when Let's Encrypt is configured
+      # - "traefik.http.routers.portainer.tls.certresolver=letsencrypt"
+      - "traefik.http.services.portainer.loadbalancer.server.port=9000"
+
+  # ── Media ──────────────────────────────────────────────────────────────────
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    restart: unless-stopped
+    # host networking required for DLNA auto-discovery on LAN
+    network_mode: host
+    volumes:
+      - /data/jellyfin/config:/config
+      - /data/jellyfin/cache:/cache
+      - /data/media:/media:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jellyfin.rule=Host(`jellyfin.${DOMAIN}`)"
+      - "traefik.http.routers.jellyfin.entrypoints=websecure"
+      - "traefik.http.routers.jellyfin.tls=true"
+      # TODO: uncomment when Let's Encrypt is configured
+      # - "traefik.http.routers.jellyfin.tls.certresolver=letsencrypt"
+      # host networking: Traefik can't discover the container IP, so we point it at the host
+      - "traefik.http.services.jellyfin.loadbalancer.server.url=http://host-gateway:8096"
+
+  # ── Monitoring ─────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    volumes:
+      - ./services/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=30d'
+    networks:
+      - homelab
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.${DOMAIN}`)"
+      - "traefik.http.routers.prometheus.entrypoints=websecure"
+      - "traefik.http.routers.prometheus.tls=true"
+      # TODO: uncomment when Let's Encrypt is configured
+      # - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: node_exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - homelab
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: grafana
+    restart: unless-stopped
+    volumes:
+      - /data/grafana:/var/lib/grafana
+      - ./services/grafana/provisioning:/etc/grafana/provisioning:ro
+    env_file:
+      - secrets/grafana.env
+    networks:
+      - homelab
+    depends_on:
+      - prometheus
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN}`)"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
+      - "traefik.http.routers.grafana.tls=true"
+      # TODO: uncomment when Let's Encrypt is configured
+      # - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+
+  # ── File sharing ───────────────────────────────────────────────────────────
+  samba:
+    image: crazymax/samba:latest
+    container_name: samba
+    restart: unless-stopped
+    # host networking required for SMB broadcast and reliable LAN discovery
+    network_mode: host
+    volumes:
+      - ./secrets/samba-config.yml:/data/config.yml:ro
+      - /data/samba/files:/files
+      - /data/samba/timemachine:/timemachine
+    environment:
+      - TZ=America/Detroit
+      - SAMBA_LOG_LEVEL=0

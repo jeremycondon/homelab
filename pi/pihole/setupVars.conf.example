@@ -1,0 +1,29 @@
+# Pi-hole unattended install configuration
+# Copy to pihole/setupVars.conf (no .example) to enable unattended install.
+# Reference: https://github.com/pi-hole/pi-hole/blob/master/automated%20install/basic-install.sh
+
+# Network interface (check with: ip -o link show | awk '{print $2}' | grep -v lo)
+# Pi Zero 2 W WiFi interface is usually wlan0
+PIHOLE_INTERFACE=wlan0
+
+# Upstream DNS — using Cloudflare here, change to preference
+PIHOLE_DNS_1=1.1.1.1
+PIHOLE_DNS_2=1.0.0.1
+
+# Query logging
+QUERY_LOGGING=true
+
+# Install web interface and lighttpd
+INSTALL_WEB_SERVER=true
+INSTALL_WEB_INTERFACE=true
+LIGHTTPD_ENABLED=true
+
+# Web UI password — change this
+WEBPASSWORD=changeme
+
+# IPv6 support (disable if your network is IPv4 only)
+IPV4_ADDRESS=
+IPV6_ADDRESS=
+
+# Blocklist — leave blank to use default, or set a custom URL
+BLOCKLISTS_URL=https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts
