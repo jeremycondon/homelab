@@ -36,6 +36,12 @@ logs:
 	docker compose logs -f $(s)
 
 decrypt-secrets:
+	@if grep -q "REPLACE_WITH_YOUR_PUBLIC_KEY" .sops.yaml; then \
+		echo "ERROR: .sops.yaml still contains the placeholder key."; \
+		echo "  Generate an age key: age-keygen -o ~/.config/sops/age/keys.txt"; \
+		echo "  Then paste the public key into .sops.yaml"; \
+		exit 1; \
+	fi
 	@if ! ls secrets/*.enc 1>/dev/null 2>&1; then echo "No encrypted secrets found."; exit 0; fi
 	@for f in secrets/*.enc; do \
 		out="$${f%.enc}"; \
@@ -45,6 +51,12 @@ decrypt-secrets:
 	@echo "Done. Plaintext files are gitignored."
 
 encrypt-secrets:
+	@if grep -q "REPLACE_WITH_YOUR_PUBLIC_KEY" .sops.yaml; then \
+		echo "ERROR: .sops.yaml still contains the placeholder key."; \
+		echo "  Generate an age key: age-keygen -o ~/.config/sops/age/keys.txt"; \
+		echo "  Then paste the public key into .sops.yaml"; \
+		exit 1; \
+	fi
 	@for f in $$(find secrets -maxdepth 1 \( -name "*.env" -o -name "*.yml" \) ! -name "*.example"); do \
 		sops --encrypt "$$f" > "$$f.enc"; \
 		echo "  $$f -> $$f.enc"; \
