@@ -24,6 +24,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Stub missing secret env files
+        run: touch secrets/grafana.env secrets/photoprism.env
+
       - name: Validate compose syntax
         run: docker compose config --quiet
 
