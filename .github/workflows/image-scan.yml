@@ -9,6 +9,9 @@ on:
     - cron: '0 6 * * 1'  # Every Monday at 6 AM UTC
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   extract-images:
     name: Extract images from compose file
@@ -43,7 +46,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Scan ${{ matrix.image }}
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ matrix.image }}
           format: sarif
