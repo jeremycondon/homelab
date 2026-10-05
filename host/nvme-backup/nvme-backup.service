@@ -1,0 +1,10 @@
+[Unit]
+Description=Back up NVMe app data to ZFS (tank/backups/hosts/jeremy-n100)
+After=zfs-mount.service docker.service
+Requires=zfs-mount.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/nvme-backup.sh
+Nice=10
+IOSchedulingClass=idle

@@ -1,0 +1,12 @@
+# Mounted read-only into the container; edit here and `docker compose restart homeassistant`.
+# UI-created integrations, devices and users live in /data/homeassistant/config/.storage, not here.
+
+default_config:
+
+# HTTP/reverse-proxy settings are no longer read from YAML (HA 2026.9+); they live in
+# .storage/http and are managed under Settings > System > Network. Current values:
+# use_x_forwarded_for: true, trusted_proxies: 172.20.0.0/16 (homelab network), 127.0.0.1
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml

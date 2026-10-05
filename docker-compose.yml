@@ -23,9 +23,12 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./services/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - traefik_certs:/certs
-    # TODO: add env_file when enabling Let's Encrypt (see services/traefik/traefik.yml)
-    # env_file:
-    #   - secrets/traefik.env
+    env_file:
+      - secrets/traefik.env        # Route53 creds for the Let's Encrypt DNS challenge
+    # pin public DNS: inheriting the host's (Tailscale MagicDNS) left ACME unable to resolve anything
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     extra_hosts:
       - "host-gateway:host-gateway"
     networks:
@@ -36,8 +39,10 @@ services:
       - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN}`)"
       - "traefik.http.routers.dashboard.entrypoints=websecure"
       - "traefik.http.routers.dashboard.tls=true"
-      # TODO: uncomment when Let's Encrypt is configured
-      # - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      # requests the wildcard cert; all other routers (tls=true) are served from it by SNI
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard.tls.domains[0].main=${DOMAIN}"
+      - "traefik.http.routers.dashboard.tls.domains[0].sans=*.${DOMAIN}"
       - "traefik.http.routers.dashboard.service=api@internal"
 
   # ── UI ─────────────────────────────────────────────────────────────────────
@@ -60,25 +65,42 @@ services:
       - "traefik.http.services.portainer.loadbalancer.server.port=9000"
 
   # ── Media ──────────────────────────────────────────────────────────────────
-  jellyfin:
-    image: jellyfin/jellyfin:latest
-    container_name: jellyfin
+  # Plex replaced Jellyfin (Oct 2026). Old Jellyfin config is still in /data/jellyfin.
+  plex:
+    image: lscr.io/linuxserver/plex:latest
+    container_name: plex
     restart: unless-stopped
-    # host networking required for DLNA auto-discovery on LAN
+    # host networking: Plex LAN discovery (GDM) and DLNA need it
     network_mode: host
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Detroit
+      - VERSION=docker
+      # Optional, only if the server doesn't show up for setup on the LAN:
+      # get a 4-minute token from https://plex.tv/claim and set PLEX_CLAIM=claim-xxxx once
+    devices:
+      - /dev/dri:/dev/dri          # Intel N100 iGPU for hardware transcoding (Plex Pass)
+    group_add:
+      - "992"                      # render
+      - "44"                       # video
     volumes:
-      - /data/jellyfin/config:/config
-      - /data/jellyfin/cache:/cache
-      - /data/media:/media:ro
+      - /data/plex/config:/config
+      - /data/plex/transcode:/transcode
+      # media is read-only except music: Plex may delete music ("Allow media deletion")
+      - /tank/media/movies:/media/movies:ro
+      - /tank/media/tv:/media/tv:ro
+      - /tank/media/music:/media/music
+      - /tank/media/audiobooks:/media/audiobooks:ro
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.jellyfin.rule=Host(`jellyfin.${DOMAIN}`)"
-      - "traefik.http.routers.jellyfin.entrypoints=websecure"
-      - "traefik.http.routers.jellyfin.tls=true"
+      - "traefik.http.routers.plex.rule=Host(`plex.${DOMAIN}`)"
+      - "traefik.http.routers.plex.entrypoints=websecure"
+      - "traefik.http.routers.plex.tls=true"
       # TODO: uncomment when Let's Encrypt is configured
-      # - "traefik.http.routers.jellyfin.tls.certresolver=letsencrypt"
+      # - "traefik.http.routers.plex.tls.certresolver=letsencrypt"
       # host networking: Traefik can't discover the container IP, so we point it at the host
-      - "traefik.http.services.jellyfin.loadbalancer.server.url=http://host-gateway:8096"
+      - "traefik.http.services.plex.loadbalancer.server.url=http://host-gateway:32400"
 
   # ── Monitoring ─────────────────────────────────────────────────────────────
   prometheus:
@@ -122,6 +144,8 @@ services:
     image: grafana/grafana-oss:latest
     container_name: grafana
     restart: unless-stopped
+    # run as the owner of /data/grafana (default uid 472 can't write there -> restart loop)
+    user: "1000:1000"
     volumes:
       - /data/grafana:/var/lib/grafana
       - ./services/grafana/provisioning:/etc/grafana/provisioning:ro
@@ -176,6 +200,11 @@ services:
       # PHOTOPRISM_DATABASE_PASSWORD comes from env_file
       - PHOTOPRISM_SITE_URL=https://photos.${DOMAIN}/
       - PHOTOPRISM_DISABLE_TLS=true
+      # run as jeremy so anything written into /tank/photos is owned by jeremy, not root
+      - PHOTOPRISM_UID=1000
+      - PHOTOPRISM_GID=1000
+      # 3.3 GB RAM host: one indexing worker (AI/TensorFlow stays enabled)
+      - PHOTOPRISM_WORKERS=1
     volumes:
       - /tank/photos:/photoprism/originals
       - /data/photoprism/storage:/photoprism/storage
@@ -208,6 +237,31 @@ services:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
 
+  # ── Home automation ────────────────────────────────────────────────────────
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: homeassistant
+    restart: unless-stopped
+    # host networking: device discovery (mDNS/SSDP) and the HomeKit Bridge integration need it
+    network_mode: host
+    # Bluetooth adapter management/recovery
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      - TZ=America/Detroit
+    volumes:
+      - /data/homeassistant/config:/config
+      - ./services/homeassistant/configuration.yaml:/config/configuration.yaml:ro
+      - /run/dbus:/run/dbus:ro     # Bluetooth
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.homeassistant.rule=Host(`home.${DOMAIN}`)"
+      - "traefik.http.routers.homeassistant.entrypoints=websecure"
+      - "traefik.http.routers.homeassistant.tls=true"
+      # host networking: Traefik can't discover the container IP, so we point it at the host
+      - "traefik.http.services.homeassistant.loadbalancer.server.url=http://host-gateway:8123"
+
   # ── File sharing ───────────────────────────────────────────────────────────
   samba:
     image: crazymax/samba:latest
@@ -217,8 +271,11 @@ services:
     network_mode: host
     volumes:
       - ./secrets/samba-config.yml:/data/config.yml:ro
-      - /tank/files:/files
-      - /tank/timemachine:/timemachine
+      - /tank/documents:/files                    # "files" share = documents
+      - /tank/backups/timemachine:/timemachine    # tank/backups/timemachine dataset (2T quota)
+      - /home/jeremy/Documents:/documents         # "documents" share = ~/Documents on the NVMe (not backed up)
+      # Whole /tank (reorganized datasets + old *.migrated until cleanup)
+      - /tank:/tank
     environment:
       - TZ=America/Detroit
       - SAMBA_LOG_LEVEL=0

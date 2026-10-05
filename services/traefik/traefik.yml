@@ -18,7 +18,10 @@ providers:
     exposedByDefault: false  # services must opt-in with traefik.enable=true
     network: homelab
 
-# ── TODO: Let's Encrypt via Route53 DNS challenge ─────────────────────────
+# ── Let's Encrypt via Route53 DNS challenge ──────────────────────────────
+# One wildcard cert (*.DOMAIN) requested by the dashboard router in docker-compose.yml;
+# every other router with tls=true is served from it by SNI.
+# Setup notes (IAM policy etc.) kept below for reference.
 #
 # Certs will be globally trusted — no browser exception needed.
 # Domain: yourdomain.com (Route53). See secrets/traefik.env.example for creds.
@@ -64,16 +67,16 @@ providers:
 #   6. make down && make up — Traefik will create TXT records in Route53,
 #      Let's Encrypt will validate, and certs will be issued within ~60 seconds.
 #
-# certificatesResolvers:
-#   letsencrypt:
-#     acme:
-#       email: YOUREMAIL@domain.com
-#       storage: /certs/acme.json
-#       dnsChallenge:
-#         provider: route53
-#         resolvers:
-#           - "8.8.8.8:53"
-#           - "1.1.1.1:53"
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      # no email: Let's Encrypt no longer sends expiry mail; Traefik renews automatically
+      storage: /certs/acme.json
+      dnsChallenge:
+        provider: route53   # creds from secrets/traefik.env
+        resolvers:
+          - "8.8.8.8:53"
+          - "1.1.1.1:53"
 
 log:
   level: INFO

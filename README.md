@@ -2,7 +2,7 @@
 
 Home server configuration. Checked into git. Secrets encrypted with SOPS+age.
 
-**Server** (Ubuntu): Portainer, Jellyfin, Grafana+Prometheus, Samba (files + Time Machine)
+**Server** (Ubuntu): Portainer, Plex, PhotoPrism, Home Assistant, Grafana+Prometheus, Samba (tank + files + Time Machine), nightly NVMe→ZFS backup
 **Pi Zero 2 W**: Pi-hole, AirPrint — see `pi/`
 
 ## Services
@@ -19,9 +19,13 @@ publicly reachable — only the DNS records need to exist):
 | Portainer | https://portainer.yourdomain.com | Docker UI |
 | Grafana | https://grafana.yourdomain.com | Metrics dashboards |
 | Prometheus | https://prometheus.yourdomain.com | Metrics scraper |
-| Jellyfin | http://jellyfin.yourdomain.com | Media (host network — DLNA) |
-| Samba `files` | smb://server/files | Finder file share |
-| Samba `timemachine` | smb://server/timemachine | Time Machine target |
+| Plex | https://plex.yourdomain.com (or http://server:32400/web) | Media (host network — GDM/DLNA); `/tank/media` read-only |
+| PhotoPrism | https://photos.yourdomain.com | Photos in `/tank/photos` |
+| Home Assistant | https://home.yourdomain.com (or http://server:8123) | Host network (discovery, HomeKit Bridge); config in `services/homeassistant/`, state in `/data/homeassistant` |
+| Samba `tank` | smb://server/tank | Whole ZFS pool (`/tank`) |
+| Samba `files` | smb://server/files | `/tank/documents` |
+| Samba `documents` | smb://server/documents | `~/Documents` on the NVMe — **not** in the nightly backup |
+| Samba `timemachine` | smb://server/timemachine | Time Machine target (`/tank/backups/timemachine`, 2T ZFS quota) |
 
 ## First-time setup (server)
 
@@ -49,7 +53,8 @@ that decrypts your secrets. Without it you cannot restore.
 ```bash
 cp secrets/grafana.env.example secrets/grafana.env
 cp secrets/samba-config.yml.example secrets/samba-config.yml
-# Edit both — change all passwords
+cp secrets/photoprism.env.example secrets/photoprism.env
+# Edit all three — change all passwords (photoprism: DATABASE_PASSWORD must equal MARIADB_PASSWORD)
 nano secrets/grafana.env
 nano secrets/samba-config.yml
 make encrypt-secrets
@@ -72,10 +77,31 @@ make up
 3. Restore private key from 1Password to `~/.config/sops/age/keys.txt`
 4. `make decrypt-secrets && make up`
 
-`decrypt-secrets` will restore `grafana.env` and `samba-config.yml` from their `.enc` files (and `traefik.env` once Let's Encrypt is configured).
+`decrypt-secrets` will restore `grafana.env`, `samba-config.yml` and `photoprism.env` from their `.enc` files (and `traefik.env` once Let's Encrypt is configured).
 
-Data lives in `/data/` — back this up separately (Jellyfin config, Grafana state, Samba files).
-Media in `/data/media` is not backed up by default.
+App data lives on the NVMe in `/data/` (Plex config, PhotoPrism storage, Grafana state) plus Docker volumes,
+and is backed up nightly to ZFS (see **Backups**). To restore it after a reinstall, before `make up`:
+
+5. `sudo zpool import tank`, then copy back from the latest backup snapshot, e.g.
+   `sudo rsync -aHX --numeric-ids /tank/backups/hosts/jeremy-n100/.zfs/snapshot/<nvme-…>/files/data/ /data/`
+   (same for `files/var/lib/docker/volumes/`), and load PhotoPrism's DB from `db-dumps/photoprism_db.sql.gz`.
+6. `make install-backup` to re-enable the nightly job.
+
+Media, photos and documents live on the ZFS pool (`/tank/...`), not on the NVMe.
+
+## Backups
+
+`host/nvme-backup/` — nightly (03:30) systemd job that backs up the NVMe app data to the ZFS dataset
+`tank/backups/hosts/jeremy-n100`:
+
+- dumps running database containers (`photoprism_db`) to `db-dumps/`
+- mirrors `/data`, Docker volumes, this repo and `/etc` into `files/` (rebuildable caches excluded)
+- snapshots the dataset (`@nvme-YYYY-MM-DD_HHMM`) and prunes **only its own** snapshots
+  (keeps the newest 30 + first of each month for 12 months)
+- writes `nvme_backup.prom` for a node_exporter textfile-collector alert
+
+Install / re-install (runs once, tests a restore, then enables the timer): `make install-backup`.
+Run now: `sudo systemctl start nvme-backup`. Status: `systemctl list-timers nvme-backup.timer`, `journalctl -u nvme-backup`.
 
 ## Time Machine setup (Mac)
 
@@ -86,7 +112,7 @@ Samba's `fruit` VFS module handles Time Machine over SMB natively.
 3. Enter `smb://server-ip/timemachine`
 4. Authenticate with the credentials from `samba-config.yml`
 
-Limit is set to 500G in the Samba config — adjust `time machine max size` to ~1.5× your Mac's internal drive.
+Size is capped by the ZFS quota on `tank/backups/timemachine` (2T); macOS sees the quota as the disk size. Change it live with `sudo zfs set quota=<size> tank/backups/timemachine` — no Samba restart needed. (crazymax/samba ignores per-share `fruit:` options, so `time machine max size` can't be set in `samba-config.yml`.)
 
 ## Grafana dashboards
 
@@ -97,7 +123,7 @@ Prometheus and node_exporter are pre-wired. Import community dashboard **[1860](
 
 ```bash
 make ps                        # container status
-make logs s=jellyfin           # follow service logs
+make logs s=plex               # follow service logs
 make pull && make restart      # update all images
 make edit-secrets f=secrets/grafana.env.enc   # edit encrypted file in-place
 ```

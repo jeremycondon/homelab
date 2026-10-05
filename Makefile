@@ -1,14 +1,15 @@
-.PHONY: help up down restart ps logs bootstrap encrypt-secrets decrypt-secrets edit-secrets pull
+.PHONY: help up down restart ps logs bootstrap encrypt-secrets decrypt-secrets edit-secrets pull install-backup
 
 help:
 	@echo ""
 	@echo "  make bootstrap           Install Docker, age, sops (run once as sudo)"
-	@echo "  make up                  Start all services"
-	@echo "  make down                Stop all services"
-	@echo "  make restart             Restart all services"
+	@echo "  make up [s=<service>]    Start all services (or one)"
+	@echo "  make down [s=<service>]  Stop all services (or one)"
+	@echo "  make restart [s=<svc>]   Restart all services (or one)"
 	@echo "  make pull                Pull latest images"
 	@echo "  make ps                  Show container status"
-	@echo "  make logs s=<service>    Follow logs (e.g. make logs s=jellyfin)"
+	@echo "  make logs s=<service>    Follow logs (e.g. make logs s=plex)"
+	@echo "  make install-backup      Install/enable nightly NVMe->ZFS backup (runs once + restore test)"
 	@echo "  make decrypt-secrets     Decrypt *.enc -> plaintext (needed after clone/restore)"
 	@echo "  make encrypt-secrets     Encrypt plaintext secrets -> *.enc (before committing)"
 	@echo "  make edit-secrets f=<f>  Edit an encrypted file in-place (e.g. make edit-secrets f=secrets/grafana.env.enc)"
@@ -17,14 +18,17 @@ help:
 bootstrap:
 	sudo bash bootstrap.sh
 
+install-backup:
+	sudo bash host/nvme-backup/install-nvme-backup.sh
+
 up:
-	docker compose up -d
+	docker compose up -d $(s)
 
 down:
-	docker compose down
+	docker compose down $(s)
 
 restart:
-	docker compose restart
+	docker compose restart $(s)
 
 pull:
 	docker compose pull
