@@ -24,11 +24,14 @@ jobs:
   validate-compose:
     name: Validate docker-compose.yml
     runs-on: ubuntu-latest
+    env:
+      DOMAIN: example.com
     steps:
       - uses: actions/checkout@v4
 
       - name: Stub missing secret env files
-        run: touch secrets/grafana.env secrets/photoprism.env
+        # one empty stub per *.env.example, so new secrets don't break CI
+        run: for f in secrets/*.env.example; do touch "${f%.example}"; done
 
       - name: Validate compose syntax
         run: docker compose config --quiet
