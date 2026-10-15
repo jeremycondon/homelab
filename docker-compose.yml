@@ -184,7 +184,7 @@ services:
 
   # ── Photos ─────────────────────────────────────────────────────────────────
   photoprism:
-    image: photoprism/photoprism:latest@sha256:cea1af8ce28bd4c4da1ed40d57c86cbe9e58199bea1a6467eaaea10b1b32a925
+    image: photoprism/photoprism:latest@sha256:0f85369636ad99ca9a1c33f2d04df6c590802d16b7c33b4a1ea026b595be06d1
     container_name: photoprism
     restart: unless-stopped
     env_file:
@@ -244,7 +244,7 @@ services:
 
   # ── Home automation ────────────────────────────────────────────────────────
   homeassistant:
-    image: ghcr.io/home-assistant/home-assistant:stable@sha256:3e6710a7ab2a61311d9d899b719f6c3657791c63e8f4942cec4ebc42401d6b76
+    image: ghcr.io/home-assistant/home-assistant:stable@sha256:130241f28d01fa80dfa3b44f7d89781c188d8642ecab9024f079f19f9f82baa0
     container_name: homeassistant
     restart: unless-stopped
     # host networking: device discovery (mDNS/SSDP) and the HomeKit Bridge integration need it
