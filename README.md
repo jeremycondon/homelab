@@ -134,7 +134,7 @@ Images in `docker-compose.yml` are pinned by digest (`image:tag@sha256:…`), so
 what CI scanned. `docker compose pull` will not move to newer builds on its own.
 
 - **Renovate** (`renovate.json`) opens PRs every Monday: one grouped PR for digest bumps of rolling tags,
-  separate PRs for version bumps. Majors for mariadb and uptime-kuma are disabled (need a migration plan).
+  separate PRs for version bumps. Majors for mariadb and uptime-kuma only appear on the Dependency Dashboard issue until you tick them (they need a migration plan).
 - **Image Security Scan** runs Trivy on every PR touching the compose file, on pushes to main, and weekly.
   Fixable CRITICAL vulns fail the run; full CRITICAL/HIGH results go to the Security tab. Accept a CVE by
   adding it to `.trivyignore` with a reason. The same workflow verifies cosign signatures for the images

@@ -1,19 +1,33 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", "docker:pinDigests"],
-  "enabledManagers": ["docker-compose"],
-  "schedule": ["before 6am on monday"],
+  "extends": [
+    "config:recommended",
+    "docker:pinDigests"
+  ],
+  "enabledManagers": [
+    "docker-compose"
+  ],
+  "schedule": [
+    "before 6am on monday"
+  ],
   "packageRules": [
     {
       "description": "Rolling tags (latest/stable/1/11) only change digest; batch those into one weekly PR",
-      "matchUpdateTypes": ["digest"],
+      "matchUpdateTypes": [
+        "digest"
+      ],
       "groupName": "image digests"
     },
     {
-      "description": "Major DB / app upgrades need a manual migration plan",
-      "matchPackageNames": ["mariadb", "louislam/uptime-kuma"],
-      "matchUpdateTypes": ["major"],
-      "enabled": false
+      "description": "Major DB / app upgrades need a migration plan: listed on the Dependency Dashboard, PR only once approved there",
+      "matchPackageNames": [
+        "mariadb",
+        "louislam/uptime-kuma"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true
     }
   ]
 }
