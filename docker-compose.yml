@@ -205,6 +205,11 @@ services:
       - PHOTOPRISM_GID=1000
       # 3.3 GB RAM host: one indexing worker (AI/TensorFlow stays enabled)
       - PHOTOPRISM_WORKERS=1
+      # soft Go heap target under mem_limit so GC works harder before the OOM killer steps in
+      - GOMEMLIMIT=1200MiB
+    # cap RAM+swap so indexing can't push the host's swap to 100% (it hit ~2 GB before)
+    mem_limit: 1536m
+    memswap_limit: 2g
     volumes:
       - /tank/photos:/photoprism/originals
       - /data/photoprism/storage:/photoprism/storage
