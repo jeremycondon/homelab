@@ -5,6 +5,14 @@ on:
     branches: [main]
     paths:
       - docker-compose.yml
+      - .trivyignore
+      - .github/workflows/image-scan.yml
+  # Renovate image-update PRs get scanned before they're merged
+  pull_request:
+    paths:
+      - docker-compose.yml
+      - .trivyignore
+      - .github/workflows/image-scan.yml
   schedule:
     - cron: '0 6 * * 1'  # Every Monday at 6 AM UTC
   workflow_dispatch:
@@ -12,6 +20,7 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# Actions are pinned to commit SHAs (tags can be moved); Dependabot keeps them current.
 jobs:
   extract-images:
     name: Extract images from compose file
@@ -19,7 +28,7 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Parse image list
         id: set-matrix
@@ -37,28 +46,78 @@ jobs:
     needs: extract-images
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       security-events: write
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.extract-images.outputs.matrix) }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - name: Scan ${{ matrix.image }}
-        uses: aquasecurity/trivy-action@v0.36.0
+      - name: Name without digest
+        id: name
+        env:
+          IMAGE: ${{ matrix.image }}
+        # keeps one Security-tab panel per image instead of one per digest
+        run: echo "name=${IMAGE%%@*}" >> "$GITHUB_OUTPUT"
+
+      - name: Full report (CRITICAL/HIGH) for the Security tab
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ matrix.image }}
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
           ignore-unfixed: true
+          trivyignores: .trivyignore
           exit-code: '0'
 
       - name: Upload SARIF to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@9f759ee644a3e7c15c1390abf49868036c00067b # v3.38.3
         if: always()
         with:
           sarif_file: trivy-results.sarif
           # Unique category so each image gets its own panel
-          category: trivy-${{ matrix.image }}
+          category: trivy-${{ steps.name.outputs.name }}
+
+      # Fails the run (and emails you on scheduled runs) when a CRITICAL vuln has a fix available.
+      # Accept a specific CVE by adding it to .trivyignore with a reason.
+      - name: Fail on fixable CRITICAL
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}
+          format: table
+          severity: CRITICAL
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          skip-setup-trivy: true
+          exit-code: '1'
+
+  verify-signatures:
+    name: Verify image signatures
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+
+      # Only images whose publishers sign them with cosign are listed (checked 2026-10-14);
+      # the rest of the stack is unsigned upstream. Each entry pins the expected signer.
+      - name: Verify signed images
+        run: |
+          set -euo pipefail
+          verify() {
+            local name=$1 issuer=$2 identity=$3 image
+            image=$(grep -E "^\s+image:\s+${name}[:@]" docker-compose.yml | awk '{print $2}')
+            if [ -z "$image" ]; then echo "::error::$name not found in docker-compose.yml"; exit 1; fi
+            echo "Verifying $image"
+            cosign verify --certificate-oidc-issuer "$issuer" \
+              --certificate-identity-regexp "$identity" "$image" > /dev/null
+          }
+
+          verify ghcr.io/home-assistant/home-assistant \
+            https://token.actions.githubusercontent.com \
+            '^https://github\.com/home-assistant/core/\.github/workflows/builder\.yml@refs/tags/'

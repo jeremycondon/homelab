@@ -1,4 +1,4 @@
-.PHONY: help up down restart ps logs bootstrap encrypt-secrets decrypt-secrets edit-secrets pull install-backup
+.PHONY: help up down restart ps logs bootstrap encrypt-secrets decrypt-secrets edit-secrets pull update install-backup
 
 help:
 	@echo ""
@@ -6,7 +6,8 @@ help:
 	@echo "  make up [s=<service>]    Start all services (or one)"
 	@echo "  make down [s=<service>]  Stop all services (or one)"
 	@echo "  make restart [s=<svc>]   Restart all services (or one)"
-	@echo "  make pull                Pull latest images"
+	@echo "  make pull                Pull the digest-pinned images in docker-compose.yml"
+	@echo "  make update              git pull + pull images + recreate changed containers (after merging a Renovate PR)"
 	@echo "  make ps                  Show container status"
 	@echo "  make logs s=<service>    Follow logs (e.g. make logs s=plex)"
 	@echo "  make install-backup      Install/enable nightly NVMe->ZFS backup (runs once + restore test)"
@@ -32,6 +33,11 @@ restart:
 
 pull:
 	docker compose pull
+
+update:
+	git pull --ff-only
+	docker compose pull
+	docker compose up -d
 
 ps:
 	docker compose ps

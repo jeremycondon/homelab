@@ -1,0 +1,4 @@
+# Accepted vulnerabilities, one CVE ID per line, each with a reason and date.
+# Used by .github/workflows/image-scan.yml; anything listed here no longer fails the scan.
+#
+# CVE-2026-00000  # example: not reachable in our config (2026-10-14)

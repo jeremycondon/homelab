@@ -13,7 +13,7 @@ services:
 
   # ── Reverse proxy ──────────────────────────────────────────────────────────
   traefik:
-    image: traefik:v3.6.7
+    image: traefik:v3.6.7@sha256:a9890c898f379c1905ee5b28342f6b408dc863f08db2dab20e46c267d1ff463a
     container_name: traefik
     restart: unless-stopped
     ports:
@@ -47,7 +47,7 @@ services:
 
   # ── UI ─────────────────────────────────────────────────────────────────────
   portainer:
-    image: portainer/portainer-ce:latest
+    image: portainer/portainer-ce:latest@sha256:4d616db18cfeb5dd41a69c0958bc825c84483ea9cde1106eb82a5d26f3bd8b0e
     container_name: portainer
     restart: unless-stopped
     volumes:
@@ -67,7 +67,7 @@ services:
   # ── Media ──────────────────────────────────────────────────────────────────
   # Plex replaced Jellyfin (Oct 2026). Old Jellyfin config is still in /data/jellyfin.
   plex:
-    image: lscr.io/linuxserver/plex:latest
+    image: lscr.io/linuxserver/plex:latest@sha256:3f71bd6eb6a4478ac19b11c5d0ba9746a5eacad1976f9b99ed4a2c21767e57bb
     container_name: plex
     restart: unless-stopped
     # host networking: Plex LAN discovery (GDM) and DLNA need it
@@ -104,7 +104,7 @@ services:
 
   # ── Monitoring ─────────────────────────────────────────────────────────────
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:latest@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e
     container_name: prometheus
     restart: unless-stopped
     volumes:
@@ -125,7 +125,7 @@ services:
       - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
 
   node_exporter:
-    image: prom/node-exporter:latest
+    image: prom/node-exporter:latest@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
     container_name: node_exporter
     restart: unless-stopped
     volumes:
@@ -141,7 +141,7 @@ services:
       - homelab
 
   grafana:
-    image: grafana/grafana-oss:latest
+    image: grafana/grafana-oss:latest@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2
     container_name: grafana
     restart: unless-stopped
     # run as the owner of /data/grafana (default uid 472 can't write there -> restart loop)
@@ -166,7 +166,7 @@ services:
 
   # ── Uptime monitoring ──────────────────────────────────────────────────────
   uptime-kuma:
-    image: louislam/uptime-kuma:1
+    image: louislam/uptime-kuma:1@sha256:70233f4acb5163fd2a59a49909cf01e44415cecff13dba69e3a86647a2919f83
     container_name: uptime-kuma
     restart: unless-stopped
     volumes:
@@ -184,7 +184,7 @@ services:
 
   # ── Photos ─────────────────────────────────────────────────────────────────
   photoprism:
-    image: photoprism/photoprism:latest
+    image: photoprism/photoprism:latest@sha256:cea1af8ce28bd4c4da1ed40d57c86cbe9e58199bea1a6467eaaea10b1b32a925
     container_name: photoprism
     restart: unless-stopped
     env_file:
@@ -227,7 +227,7 @@ services:
       - "traefik.http.services.photoprism.loadbalancer.server.port=2342"
 
   photoprism_db:
-    image: mariadb:11
+    image: mariadb:11@sha256:6422478cb8e159f080fb1d8ccf65101e26fe51385787fde7d16c3b165a331f15
     container_name: photoprism_db
     restart: unless-stopped
     env_file:
@@ -244,7 +244,7 @@ services:
 
   # ── Home automation ────────────────────────────────────────────────────────
   homeassistant:
-    image: ghcr.io/home-assistant/home-assistant:stable
+    image: ghcr.io/home-assistant/home-assistant:stable@sha256:3e6710a7ab2a61311d9d899b719f6c3657791c63e8f4942cec4ebc42401d6b76
     container_name: homeassistant
     restart: unless-stopped
     # host networking: device discovery (mDNS/SSDP) and the HomeKit Bridge integration need it
@@ -269,7 +269,7 @@ services:
 
   # ── File sharing ───────────────────────────────────────────────────────────
   samba:
-    image: crazymax/samba:latest
+    image: crazymax/samba:latest@sha256:b37f7af97c773eddb593537f64da6389e5ee6695bcecf44f3ba1a8a6bcf34125
     container_name: samba
     restart: unless-stopped
     # host networking required for SMB broadcast and reliable LAN discovery
