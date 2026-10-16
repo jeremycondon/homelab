@@ -5,13 +5,13 @@ on:
     branches: [main]
     paths:
       - docker-compose.yml
-      - .trivyignore
+      - .trivyignore.yaml
       - .github/workflows/image-scan.yml
   # Renovate image-update PRs get scanned before they're merged
   pull_request:
     paths:
       - docker-compose.yml
-      - .trivyignore
+      - .trivyignore.yaml
       - .github/workflows/image-scan.yml
   schedule:
     - cron: '0 6 * * 1'  # Every Monday at 6 AM UTC
@@ -70,7 +70,7 @@ jobs:
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
           ignore-unfixed: true
-          trivyignores: .trivyignore
+          trivyignores: .trivyignore.yaml
           exit-code: '0'
 
       - name: Upload SARIF to GitHub Security tab
@@ -82,7 +82,7 @@ jobs:
           category: trivy-${{ steps.name.outputs.name }}
 
       # Fails the run (and emails you on scheduled runs) when a CRITICAL vuln has a fix available.
-      # Accept a specific CVE by adding it to .trivyignore with a reason.
+      # Accept a specific CVE by adding it to .trivyignore.yaml with a statement and expiry.
       - name: Fail on fixable CRITICAL
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -90,7 +90,7 @@ jobs:
           format: table
           severity: CRITICAL
           ignore-unfixed: true
-          trivyignores: .trivyignore
+          trivyignores: .trivyignore.yaml
           skip-setup-trivy: true
           exit-code: '1'
 

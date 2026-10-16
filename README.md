@@ -137,7 +137,9 @@ what CI scanned. `docker compose pull` will not move to newer builds on its own.
   separate PRs for version bumps. Majors for mariadb and uptime-kuma only appear on the Dependency Dashboard issue until you tick them (they need a migration plan).
 - **Image Security Scan** runs Trivy on every PR touching the compose file, on pushes to main, and weekly.
   Fixable CRITICAL vulns fail the run; full CRITICAL/HIGH results go to the Security tab. Accept a CVE by
-  adding it to `.trivyignore` with a reason. The same workflow verifies cosign signatures for the images
+  adding it to `.trivyignore.yaml` with a `statement` (why) and an `expired_at` date. Entries stop
+  suppressing once that date passes, so the CVE fails the scan again and gets re-reviewed — review it
+  rather than pushing the date out by reflex. The same workflow verifies cosign signatures for the images
   whose publishers sign them (currently only Home Assistant).
 - **Dependabot** (`.github/dependabot.yml`) bumps the SHA-pinned GitHub Actions weekly.
 

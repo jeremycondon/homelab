@@ -1,0 +1,126 @@
+# Accepted vulnerabilities. Used by .github/workflows/image-scan.yml.
+#
+# Every entry needs a statement (why it's accepted) and an expired_at date.
+# Once expired_at passes, the entry stops suppressing and the CVE fails the
+# scan again — so acceptances get re-reviewed instead of silently rotting.
+# Review a CVE rather than extending the date by reflex.
+#
+# Entries are matched on CVE id alone, not path. Trivy reports the same
+# finding under different target paths depending on its version, so a
+# path-scoped entry would quietly stop matching after an action bump.
+# The trade-off: an id here is suppressed across every image we scan.
+
+vulnerabilities:
+
+  # ── Go toolchain / libraries compiled into upstream images ───────────────
+  # Nothing to update to: these images are already pinned to the newest
+  # build their publisher ships. They clear when upstream rebuilds.
+
+  - id: CVE-2025-68121
+    statement: >-
+      Go crypto/tls, cert validation on session resumption. Needs RootCAs or
+      ClientCAs to change between handshake and resumption via Config.Clone or
+      GetConfigForClient. Present in traefik, gosu (mariadb), and uptime-kuma's
+      healthcheck + cloudflared binaries — none of which mutate trust config
+      per connection; gosu and tempio do no TLS at all. Awaiting upstream
+      rebuilds on Go 1.24.13+.
+    expired_at: 2027-01-15
+
+  - id: CVE-2024-24790
+    statement: >-
+      Go net/netip IPv4-mapped IPv6 handling, in uptime-kuma's localhost
+      healthcheck binary (Go 1.20.5). Not network-reachable. Clears when
+      uptime-kuma rebuilds the helper.
+    expired_at: 2027-01-15
+
+  - id: CVE-2026-33186
+    statement: >-
+      grpc-go authz bypass via HTTP/2 paths missing a leading slash. Only
+      affects servers using path-based authz (grpc/authz RBAC or an
+      interceptor on FullMethod) with a default-allow fallback. Traefik routes
+      HTTP, and cloudflared inside uptime-kuma is unused here. Fixed in
+      grpc-go 1.79.3; awaiting upstream rebuilds.
+    expired_at: 2027-01-15
+
+  - id: GHSA-r277-6w6q-xmqw
+    statement: >-
+      kin-openapi fail-open auth bypass when ValidationHandler.Load() gets a
+      nil AuthenticationFunc. Grafana does not use this handler as its auth
+      middleware — it has its own auth stack. Grafana is LAN-only behind
+      Traefik. Fixed in kin-openapi 0.144.0; awaiting a grafana-oss rebuild.
+    expired_at: 2027-01-15
+
+  # ── Not applicable to this hardware ──────────────────────────────────────
+
+  - id: CVE-2026-31789
+    statement: >-
+      OpenSSL heap overflow converting oversized OCTET STRINGs to hex. 32-bit
+      platforms only (the length*3 allocation cannot overflow on 64-bit), and
+      needs a >1GB certificate to be printed or logged. The server is x86_64,
+      so this cannot trigger. Rated Low by OpenSSL and Red Hat. Alpine fix is
+      3.5.6-r0; clears on the next traefik rebuild.
+    expired_at: 2027-04-15
+
+  # ── uptime-kuma 1.x application dependencies ─────────────────────────────
+  # Shorter expiry on purpose: the 1.x line is not keeping its dependencies
+  # current and these keep accumulating. The real fix is the 2.x major, held
+  # for approval on the Renovate Dependency Dashboard. Revisit by then.
+  #
+  # All of these need either uptime-kuma admin access (monitor and
+  # notification config is admin-authored) or a malicious monitored endpoint.
+  # The instance is LAN-only behind Traefik with a single admin.
+
+  - id: CVE-2026-77413
+    statement: >-
+      JSONata RCE via crafted expression. Expressions come from the json-query
+      monitor config, which only an admin can write. Needs uptime-kuma 2.x.
+    expired_at: 2026-12-15
+
+  - id: CVE-2026-77414
+    statement: >-
+      JSONata RCE via crafted expression. Same admin-authored input path as
+      CVE-2026-77413. Needs uptime-kuma 2.x.
+    expired_at: 2026-12-15
+
+  - id: CVE-2026-77415
+    statement: >-
+      JSONata RCE via crafted expression. Same admin-authored input path as
+      CVE-2026-77413. Needs uptime-kuma 2.x.
+    expired_at: 2026-12-15
+
+  - id: CVE-2026-45618
+    statement: >-
+      LiquidJS RCE via crafted template. Notification templates are
+      admin-authored. Needs uptime-kuma 2.x.
+    expired_at: 2026-12-15
+
+  - id: CVE-2026-41242
+    statement: >-
+      protobufjs code execution via injected protobuf definition type fields.
+      Reachable only through the gRPC monitor type, which is not in use.
+      Needs uptime-kuma 2.x.
+    expired_at: 2026-12-15
+
+  - id: CVE-2026-25896
+    statement: >-
+      fast-xml-parser XSS parsing XML responses. Would need a monitored
+      endpoint to return hostile XML; monitors here target LAN services.
+      Needs uptime-kuma 2.x.
+    expired_at: 2026-12-15
+
+  - id: CVE-2026-90711
+    statement: >-
+      proxy-addr IP spoofing via IPv4-mapped IPv6 in a trusted subnet.
+      uptime-kuma sits behind Traefik on the LAN and does not make trust
+      decisions on client IP. Needs uptime-kuma 2.x.
+    expired_at: 2026-12-15
+
+  - id: CVE-2026-59873
+    statement: >-
+      node-tar DoS via a crafted gzip bomb. Reachable through the
+      admin-only backup/restore path. Needs uptime-kuma 2.x.
+    expired_at: 2026-12-15
+
+misconfigurations: []
+secrets: []
+licenses: []
