@@ -141,7 +141,9 @@ what CI scanned. `docker compose pull` will not move to newer builds on its own.
   suppressing once that date passes, so the CVE fails the scan again and gets re-reviewed — review it
   rather than pushing the date out by reflex. The same workflow verifies cosign signatures for the images
   whose publishers sign them (currently only Home Assistant).
-- **Dependabot** (`.github/dependabot.yml`) bumps the SHA-pinned GitHub Actions weekly.
+- **Dependabot** (`.github/dependabot.yml`) bumps the SHA-pinned GitHub Actions weekly. It cannot bump
+  Trivy itself: `trivy-action` defaults to whatever Trivy its own release shipped with, which lags, so the
+  Trivy version is pinned in `image-scan.yml`. Bump it when a scan log prints a newer version is available.
 
 After merging an image PR, run `make update` on the server.
 
