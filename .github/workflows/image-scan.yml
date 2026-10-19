@@ -62,9 +62,16 @@ jobs:
         # keeps one Security-tab panel per image instead of one per digest
         run: echo "name=${IMAGE%%@*}" >> "$GITHUB_OUTPUT"
 
+      # trivy-action bundles whichever Trivy its own release shipped with, which lags well
+      # behind Trivy itself: v0.36.0 is the latest action and still defaults to Trivy
+      # v0.70.0 (Apr 2026). Dependabot keeps the action current but cannot move that
+      # default, so Trivy is pinned here instead. 0.70 under-reported: it missed real
+      # fixable CRITICALs that 0.76 finds in nested Node dependencies.
+      # Bump when a scan log prints "Version X of Trivy is now available".
       - name: Full report (CRITICAL/HIGH) for the Security tab
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
+          version: v0.76.0
           image-ref: ${{ matrix.image }}
           format: sarif
           output: trivy-results.sarif
@@ -91,6 +98,7 @@ jobs:
           severity: CRITICAL
           ignore-unfixed: true
           trivyignores: .trivyignore.yaml
+          # reuses the binary installed above, so the version pinned there governs both
           skip-setup-trivy: true
           exit-code: '1'
 
