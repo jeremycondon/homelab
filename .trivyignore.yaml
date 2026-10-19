@@ -50,6 +50,20 @@ vulnerabilities:
       Traefik. Fixed in kin-openapi 0.144.0; awaiting a grafana-oss rebuild.
     expired_at: 2027-01-15
 
+  # ── Home Assistant base image ────────────────────────────────────────────
+
+  - id: CVE-2026-60002
+    statement: >-
+      OpenSSH client-side use-after-free during host key re-exchange. Only
+      reachable if Home Assistant initiates an SSH connection to a hostile or
+      compromised server; HA core does not make outbound SSH connections in
+      normal operation. Alpine has published the fix (10.3_p1-r1) for the 3.24
+      branch, but neither the current nor the previous HA stable build has
+      picked it up yet — both still ship 10.3_p1-r0. Short expiry: this should
+      clear on the next HA rebuild that refreshes apk packages, and if it has
+      not by then it is worth asking why upstream is not rebuilding.
+    expired_at: 2026-11-16
+
   # ── Not applicable to this hardware ──────────────────────────────────────
 
   - id: CVE-2026-31789
