@@ -1,4 +1,4 @@
-.PHONY: help up down restart ps logs bootstrap encrypt-secrets decrypt-secrets edit-secrets pull update install-backup
+.PHONY: help up down restart ps logs bootstrap encrypt-secrets decrypt-secrets edit-secrets pull update install-backup install-disk-health
 
 help:
 	@echo ""
@@ -11,6 +11,7 @@ help:
 	@echo "  make ps                  Show container status"
 	@echo "  make logs s=<service>    Follow logs (e.g. make logs s=plex)"
 	@echo "  make install-backup      Install/enable nightly NVMe->ZFS backup (runs once + restore test)"
+	@echo "  make install-disk-health Install/enable 5-min SMART + ZFS pool health metrics (alerts in Grafana)"
 	@echo "  make decrypt-secrets     Decrypt *.enc -> plaintext (needed after clone/restore)"
 	@echo "  make encrypt-secrets     Encrypt plaintext secrets -> *.enc (before committing)"
 	@echo "  make edit-secrets f=<f>  Edit an encrypted file in-place (e.g. make edit-secrets f=secrets/grafana.env.enc)"
@@ -21,6 +22,9 @@ bootstrap:
 
 install-backup:
 	sudo bash host/nvme-backup/install-nvme-backup.sh
+
+install-disk-health:
+	sudo bash host/disk-health/install-disk-health.sh
 
 up:
 	docker compose up -d $(s)

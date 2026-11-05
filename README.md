@@ -103,6 +103,27 @@ Media, photos and documents live on the ZFS pool (`/tank/...`), not on the NVMe.
 Install / re-install (runs once, tests a restore, then enables the timer): `make install-backup`.
 Run now: `sudo systemctl start nvme-backup`. Status: `systemctl list-timers nvme-backup.timer`, `journalctl -u nvme-backup`.
 
+## Disk health & alerts
+
+`host/disk-health/` — systemd timer (every 5 min) that reads SMART from every disk (`smartctl -d sat` for the
+USB enclosure) and parses `zpool status`, writing `disk_health.prom` for node_exporter's textfile collector:
+temperature, reallocated/pending/CRC counters, NVMe wear, pool member state and error counters, permanent
+data errors, last finished scrub. Install / re-install: `make install-disk-health`.
+Each run also logs a one-line summary per disk: `journalctl -u disk-health`.
+
+Long-term SMART history comes from `smartd` (package `smartmontools`), which logs every attribute every 30 min to
+`/var/lib/smartmontools/attrlog.<model>-<serial>.ata.csv`. smartd only scans for disks at startup, so restart it
+(`sudo systemctl restart smartmontools`) if the enclosure reconnects.
+
+Alerts are Grafana-managed and provisioned from `services/grafana/provisioning/alerting/`: `rules.yml` (pool not
+ONLINE, disk missing, data/I/O errors, SMART failures and rising counters, temperature, NVMe wear, scrub overdue,
+stale metrics, NVMe backup failed), `contact-points.yml` and `policies.yml`. They push to [ntfy](https://ntfy.sh):
+install the ntfy app and subscribe to the topic in `NTFY_URL` (`secrets/grafana.env`). Critical alerts are urgent
+priority and repeat every 4 h; warnings repeat every 12 h. Edit the files and `make restart s=grafana`; rules
+provisioned this way are read-only in the Grafana UI.
+
+These alerts run on this box, so they can't report the box itself being down.
+
 ## Time Machine setup (Mac)
 
 Samba's `fruit` VFS module handles Time Machine over SMB natively.

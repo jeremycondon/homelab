@@ -1,0 +1,15 @@
+# Critical alerts push at urgent priority and repeat every 4 h until fixed; everything else at normal priority every 12 h.
+apiVersion: 1
+
+policies:
+  - orgId: 1
+    receiver: ntfy-warning
+    group_by: ['alertname']
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 12h
+    routes:
+      - receiver: ntfy-critical
+        object_matchers:
+          - ['severity', '=', 'critical']
+        repeat_interval: 4h

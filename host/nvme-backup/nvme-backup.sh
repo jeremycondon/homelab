@@ -42,13 +42,18 @@ log() { echo "$(date '+%F %T') $*"; logger -t "$LOG_TAG" -- "$*" 2>/dev/null || 
 fail() { log "FAILED: $*"; write_status 0; exit 1; }
 write_status() {  # $1 = 1 success / 0 failure
   mkdir -p "$STATUS_DIR"
-  local f="$STATUS_DIR/nvme_backup.prom"
+  local f="$STATUS_DIR/nvme_backup.prom" last_ok
+  # on failure keep the previous success time, so "no successful backup in N hours" still works
+  if [[ $1 == 1 ]]; then last_ok=$(date +%s)
+  else last_ok=$(awk '/^nvme_backup_last_success_timestamp_seconds /{print $2}' "$f" 2>/dev/null || true); fi
   {
     echo "# HELP nvme_backup_last_run_timestamp_seconds Last time the NVMe backup job ran."
     echo "nvme_backup_last_run_timestamp_seconds $(date +%s)"
     echo "# HELP nvme_backup_last_success Whether the last run succeeded (1) or failed (0)."
     echo "nvme_backup_last_success $1"
-    [[ $1 == 1 ]] && echo "nvme_backup_last_success_timestamp_seconds $(date +%s)"
+    # `if`, not `[[ ]] &&`: a false test as the block's last command made the block fail,
+    # which skipped the mv, so failed runs were never published
+    if [[ -n $last_ok ]]; then echo "nvme_backup_last_success_timestamp_seconds $last_ok"; fi
   } > "$f.tmp" && mv "$f.tmp" "$f"
 }
 trap 'fail "error on line $LINENO"' ERR

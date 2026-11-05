@@ -1,0 +1,9 @@
+[Unit]
+Description=Disk SMART + ZFS pool health metrics for node_exporter
+After=zfs-mount.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/disk-health-metrics
+TimeoutStartSec=5min
+Nice=10

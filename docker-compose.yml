@@ -137,6 +137,8 @@ services:
       - '--path.rootfs=/rootfs'
       - '--path.sysfs=/host/sys'
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      # *.prom files written by host jobs: nvme_backup.prom, disk_health.prom (alerting/rules.yml)
+      - '--collector.textfile.directory=/rootfs/var/lib/node_exporter/textfile_collector'
     networks:
       - homelab
 

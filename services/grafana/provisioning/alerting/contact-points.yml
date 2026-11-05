@@ -1,0 +1,35 @@
+# ntfy push notifications (https://ntfy.sh). NTFY_URL (https://ntfy.sh/<topic>) comes from secrets/grafana.env.
+# ntfy builds the push from Grafana's webhook JSON: tpl=1 turns on templating, t/m pick the title and
+# message fields (%7B%7B.title%7D%7D is {{.title}} URL-encoded), p is the push priority (5 = urgent, 3 = default).
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: ntfy-critical
+    receivers:
+      - uid: ntfy-critical
+        type: webhook
+        settings:
+          url: ${NTFY_URL}?tpl=1&p=5&tags=rotating_light&t=%7B%7B.title%7D%7D&m=%7B%7B.message%7D%7D
+          httpMethod: POST
+          title: '{{ template "ntfy.title" . }}'
+          message: '{{ template "ntfy.message" . }}'
+  - orgId: 1
+    name: ntfy-warning
+    receivers:
+      - uid: ntfy-warning
+        type: webhook
+        settings:
+          url: ${NTFY_URL}?tpl=1&p=3&tags=warning&t=%7B%7B.title%7D%7D&m=%7B%7B.message%7D%7D
+          httpMethod: POST
+          title: '{{ template "ntfy.title" . }}'
+          message: '{{ template "ntfy.message" . }}'
+
+templates:
+  - orgId: 1
+    name: ntfy
+    template: |
+      {{ define "ntfy.title" }}{{ if eq .Status "resolved" }}Resolved{{ else }}{{ .CommonLabels.severity | title }}{{ end }}: {{ .CommonLabels.alertname }}{{ end }}
+      {{ define "ntfy.message" }}{{ range .Alerts.Firing }}{{ .Annotations.summary }}
+      {{ end }}{{ range .Alerts.Resolved }}OK again: {{ .Annotations.summary }}
+      {{ end }}{{ end }}

@@ -1,0 +1,350 @@
+# Disk, pool and backup alerts. Metrics: host/disk-health (disk_health.prom), host/nvme-backup (nvme_backup.prom)
+# and node_exporter's zfs collector. Notifications: contact-points.yml / policies.yml (ntfy).
+# Generated layout, one rule per block: A = PromQL instant query, C = threshold on A.
+# Templates use .Labels/.Values, never the dollar-sign forms: Grafana expands env vars in provisioning files.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: storage
+    folder: Homelab
+    interval: 1m
+    rules:
+      - uid: zfs-pool-not-online
+        title: "ZFS pool not ONLINE"
+        condition: C
+        for: 1m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "Pool tank is not ONLINE (degraded, suspended or gone). Run: zpool status tank"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              instant: true
+              expr: "(1 - node_zfs_zpool_state{zpool=\"tank\",state=\"online\"}) or on () vector(1)"
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+      - uid: zfs-disk-not-online
+        title: "ZFS pool disk not ONLINE"
+        condition: C
+        for: 1m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "Pool {{ .Labels.pool }}: disk {{ .Labels.serial }} ({{ .Labels.vdev }}) is not ONLINE. Run: zpool status {{ .Labels.pool }}"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              instant: true
+              expr: "1 - zpool_vdev_online"
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+      - uid: pool-disks-missing
+        title: "Pool disks missing"
+        condition: C
+        for: 2m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "Only {{ printf \"%.0f\" .Values.A.Value }} of 3 pool disks answer SMART queries. Check the USB enclosure (power, cable) and dmesg."
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              instant: true
+              expr: "(count(smart_device_up{kind=\"hdd\"}) or on () vector(0)) and on () disk_health_last_run_timestamp_seconds"
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: lt, params: [3]}
+      - uid: zfs-data-errors
+        title: "ZFS permanent data errors"
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "Pool {{ .Labels.pool }} has {{ printf \"%.0f\" .Values.A.Value }} files/objects with permanent errors. List them: sudo zpool status -v {{ .Labels.pool }}"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              instant: true
+              expr: "zpool_data_errors"
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+      - uid: smart-health-failed
+        title: "Disk SMART health FAILED"
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk {{ .Labels.serial }} ({{ .Labels.kind }}) reports SMART overall health FAILED. Plan a replacement now."
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              instant: true
+              expr: "1 - smart_health_passed"
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+      - uid: nvme-problem
+        title: "NVMe drive problem"
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "NVMe {{ .Labels.serial }} reports a problem: critical warning set, over 80% endurance used, or new media errors. Run: sudo smartctl -a /dev/nvme0"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              instant: true
+              expr: "(smart_nvme_critical_warning > 0) or (smart_nvme_percentage_used > 80) or (max_over_time(smart_nvme_media_errors[1d]) - min_over_time(smart_nvme_media_errors[1d]) > 0)"
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+      - uid: zfs-device-errors
+        title: "ZFS disk I/O errors"
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk {{ .Labels.serial }} in pool {{ .Labels.pool }} has {{ printf \"%.0f\" .Values.A.Value }} read/write/checksum errors. Check zpool status; reset with zpool clear once handled."
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              instant: true
+              expr: "sum by (pool, vdev, serial) (zpool_vdev_errors)"
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+      - uid: smart-counters-increased
+        title: "SMART error counter increased"
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ .Labels.name }} on disk {{ .Labels.serial }} rose by {{ printf \"%.0f\" .Values.A.Value }} in the last 24 h (reallocated sectors / uncorrectable reads / cable-bridge CRC errors)."
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              instant: true
+              expr: "max_over_time(smart_attribute_raw{id=~\"5|187|199\"}[1d]) - min_over_time(smart_attribute_raw{id=~\"5|187|199\"}[1d])"
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+      - uid: smart-pending-sectors
+        title: "Disk has unreadable sectors"
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk {{ .Labels.serial }}: {{ .Labels.name }} = {{ printf \"%.0f\" .Values.A.Value }}. A scrub rewrites them from parity; watch whether reallocated sectors rise."
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              instant: true
+              expr: "smart_attribute_raw{id=~\"197|198\"}"
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+      - uid: disk-temperature-high
+        title: "Disk temperature high"
+        condition: C
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk {{ .Labels.serial }} ({{ .Labels.kind }}) has been at {{ printf \"%.0f\" .Values.A.Value }} °C for 15 min (HDDs normally 34-47 °C, rated max 60 °C). Check enclosure fan and airflow."
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              instant: true
+              expr: "smart_temperature_celsius{kind=\"hdd\"} > 50 or smart_temperature_celsius{kind=\"nvme\"} > 70"
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+      - uid: zfs-scrub-overdue
+        title: "ZFS scrub overdue"
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pool {{ .Labels.pool }}: last finished scrub was {{ printf \"%.0f\" .Values.A.Value }} days ago. The monthly scrub (2nd Sunday, /etc/cron.d/zfsutils-linux) may not be running."
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              instant: true
+              expr: "(time() - zpool_last_scrub_end_timestamp_seconds) / 86400 unless on (pool) zpool_scrub_in_progress == 1"
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [40]}
+      - uid: disk-health-stale
+        title: "Disk health metrics stale"
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk/pool health metrics are missing or over 30 min old, so the disk alerts can't fire. Check: systemctl status disk-health.timer; journalctl -u disk-health"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              instant: true
+              expr: "(time() - disk_health_last_run_timestamp_seconds) or on () vector(1e9)"
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [1800]}
+      - uid: nvme-backup-failed
+        title: "NVMe backup failed"
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "The nightly NVMe to ZFS backup failed or hasn't succeeded in 30 h. Check: journalctl -u nvme-backup"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: PBFA97CFB590B2093
+            model:
+              refId: A
+              instant: true
+              expr: "((1 - nvme_backup_last_success) + ((time() - nvme_backup_last_success_timestamp_seconds) > bool 108000)) or on () vector(1)"
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
