@@ -12,11 +12,23 @@ entryPoints:
           scheme: https
   websecure:
     address: ":443"
+  metrics:
+    address: ":8082"  # Prometheus only, over the homelab network; no host port
+
+metrics:
+  prometheus:
+    entryPoint: metrics
+    addServicesLabels: true
+    addEntryPointsLabels: true
 
 providers:
   docker:
     exposedByDefault: false  # services must opt-in with traefik.enable=true
     network: homelab
+  file:
+    # non-Docker backends (the Pi) — see services/traefik/dynamic/
+    directory: /etc/traefik/dynamic
+    watch: true
 
 # ── Let's Encrypt via Route53 DNS challenge ──────────────────────────────
 # One wildcard cert (*.DOMAIN) requested by the dashboard router in docker-compose.yml;

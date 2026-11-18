@@ -1,0 +1,23 @@
+# Routes to the Pi Zero 2 W ("pinet", 192.168.68.82 — static DHCP lease).
+# nginx on the Pi serves both sites on :80 by Host name; Traefik passes the
+# original Host header and sets X-Forwarded-For/-Proto by default.
+# TLS comes from the *.DOMAIN wildcard cert (no certresolver needed here).
+# DOMAIN is read from the traefik container's environment (docker-compose.yml).
+http:
+  routers:
+    pihole:
+      rule: 'Host(`pihole.{{ env "DOMAIN" }}`)'
+      entryPoints: [websecure]
+      service: pi-nginx
+      tls: {}
+    cups:
+      rule: 'Host(`cups.{{ env "DOMAIN" }}`)'
+      entryPoints: [websecure]
+      service: pi-nginx
+      tls: {}
+
+  services:
+    pi-nginx:
+      loadBalancer:
+        servers:
+          - url: "http://192.168.68.82:80"

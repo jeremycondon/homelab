@@ -5,4 +5,57 @@ global:
 scrape_configs:
   - job_name: node
     static_configs:
-      - targets: ['node_exporter:9100']
+      - targets: ['host-gateway:9100']   # node_exporter is on the host network (docker-compose.yml)
+        labels:
+          instance: jeremy-n100
+
+  # Per-container metrics. Dashboard: grafana/dashboards/containers.json
+  - job_name: cadvisor
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+  # Pi-hole on the Pi via pihole-exporter. Dashboard: grafana/dashboards/pihole.json
+  - job_name: pihole
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['pihole-exporter:9617']
+        labels:
+          instance: pinet
+
+  # Request rate/errors/latency per service (metrics entrypoint, not published on the host). Dashboard: grafana/dashboards/traefik.json
+  - job_name: traefik
+    static_configs:
+      - targets: ['traefik:8082']
+
+  # ESP32-S3 RS485 bridge on the hot tub (192.168.68.87). Dashboard: grafana/dashboards/hottub.json
+  - job_name: hottub
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['hottub.local:9100']
+        labels:
+          instance: hottub
+
+  # PiAware (dump1090-fa) on the Pi Zero 2 W, via json-exporter reading SkyAware's JSON.
+  # One target per JSON file; `module` picks the matching block in services/piaware-exporter/config.yml.
+  # Dashboard: grafana/dashboards/piaware.json
+  - job_name: piaware
+    scrape_interval: 30s
+    metrics_path: /probe
+    static_configs:
+      - targets: ['http://piaware.local/skyaware/data/stats.json']
+        labels: {__param_module: piaware_stats}
+      - targets: ['http://piaware.local/skyaware/data/aircraft.json']
+        labels: {__param_module: piaware_aircraft}
+      - targets: ['http://piaware.local/skyaware/data/receiver.json']
+        labels: {__param_module: piaware_receiver}
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_module]
+        regex: piaware_(.*)
+        target_label: file           # up{job="piaware"} per JSON file: stats / aircraft / receiver
+      - target_label: instance
+        replacement: piaware
+      - target_label: __address__
+        replacement: piaware-exporter:7979

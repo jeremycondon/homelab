@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Disk (SMART) + ZFS pool health -> node_exporter textfile metrics.
+"""Disk (SMART) + ZFS pool health and capacity -> node_exporter textfile metrics.
 
 Run every 5 min by disk-health.timer, as root (smartctl and `zpool status` need it).
 Writes /var/lib/node_exporter/textfile_collector/disk_health.prom; Grafana alerts on it
@@ -144,12 +144,32 @@ def zpool(pool, serials):
     scrub_state(pool, scan)
 
 
+def capacity(pool):
+    """Pool size/alloc and top-level dataset usage (node_exporter has neither). Feeds the Storage dashboard."""
+    row = (run(["zpool", "list", "-Hp", "-o", "size,alloc,free,frag", pool]) or "").split()
+    if len(row) == 4:
+        for name, v in zip(("size", "allocated", "free"), row[:3]):
+            add(f"zpool_{name}_bytes", v, f"Pool {name} (raw, before parity).", pool=pool)
+        if row[3].isdigit():
+            add("zpool_fragmentation_percent", row[3], "Pool free-space fragmentation.", pool=pool)
+    cols = "name,used,avail,usedbydataset,usedbysnapshots"
+    for line in (run(["zfs", "list", "-Hp", "-d", "1", "-o", cols, pool]) or "").splitlines():
+        name, used, avail, by_ds, by_snap = line.split("\t")
+        d = dict(pool=pool, dataset=name)
+        add("zfs_dataset_used_bytes", used, "Space used by the dataset, including children and snapshots.", **d)
+        add("zfs_dataset_used_by_dataset_bytes", by_ds, "Space used by files in the dataset itself (no children/snapshots).", **d)
+        add("zfs_dataset_used_by_snapshots_bytes", by_snap, "Space only snapshots are holding (freed if they're destroyed).", **d)
+        if name == pool:
+            add("zfs_dataset_available_bytes", avail, "Usable space left (after parity).", pool=pool, dataset=name)
+
+
 def main():
     for dev, tran in disks():
         smart(dev, tran)
     serials = serial_map()
     for pool in (run(["zpool", "list", "-H", "-o", "name"]) or "").split():
         zpool(pool, serials)
+        capacity(pool)
     add("disk_health_last_run_timestamp_seconds", time.time(), "When disk-health-metrics last ran.")
 
     text = "".join(f"# HELP {n} {HELP[n]}\n# TYPE {n} gauge\n" + "\n".join(lines) + "\n" for n, lines in samples.items())
